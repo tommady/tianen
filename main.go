@@ -1,30 +1,76 @@
 package main
 
 import (
-	"bufio"
-	"fmt"
-	"io"
 	"log"
 	"net/http"
 	"os"
+	"sync"
+	"time"
 
 	"github.com/line/line-bot-sdk-go/linebot"
+	"github.com/minio/minio-go/v6"
 )
 
 var bot *linebot.Client
+var pool = newWorkerPool(100, 10)
+var mc *minio.Client
+
+type jobFunc func() error
+
+type workerPool struct {
+	wg   *sync.WaitGroup
+	pool chan jobFunc
+}
+
+func newWorkerPool(poolSize, workerNum int) *workerPool {
+	wp := &workerPool{
+		wg:   new(sync.WaitGroup),
+		pool: make(chan jobFunc, poolSize),
+	}
+
+	for i := 0; i < workerNum; i++ {
+		wp.wg.Add(1)
+		go wp.worker()
+	}
+
+	return wp
+}
+
+func (wp *workerPool) worker() {
+	for job := range wp.pool {
+		if err := job(); err != nil {
+			log.Println(err)
+		}
+	}
+}
+
+func (wp *workerPool) PutJob(job jobFunc) {
+	wp.pool <- job
+}
+
+func (wp *workerPool) Close() {
+	close(wp.pool)
+	wp.wg.Wait()
+}
 
 func main() {
 	var err error
 	bot, err = linebot.New(os.Getenv("CHANNEL_SECRET"), os.Getenv("CHANNEL_ACCESS_TOKEN"))
 	if err != nil {
-		fmt.Println(err)
-		return
+		log.Fatal(err)
 	}
+
+	mc, err = minio.New(os.Getenv("MINIO_ENDPOINT"), os.Getenv("MINIO_ACCESS_KEY_ID"), os.Getenv("MINIO_SECRET_ACCESS_KEY"), false)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	defer pool.Close()
 
 	http.HandleFunc("/", callbackHandler)
 
 	if err := http.ListenAndServe(":"+os.Getenv("PORT"), nil); err != nil {
-		fmt.Println(err)
+		log.Fatal(err)
 	}
 }
 
@@ -43,52 +89,36 @@ func callbackHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	for _, event := range events {
-		if event.Type == linebot.EventTypeMessage {
-			switch message := event.Message.(type) {
-			case *linebot.ImageMessage:
-				log.Println("image")
-				res, err := bot.GetMessageContent(message.ID).Do()
-				if err != nil {
-					log.Println(err)
-					return
-				}
-				// Content       io.ReadCloser
-				// ContentLength int64
-				// ContentType   string
-				fr := bufio.NewReader(res.Content)
-				fo, err := os.Create("gglong.png")
-				if err != nil {
-					log.Println(err)
-					return
-				}
-				defer fo.Close()
+		pool.PutJob(func() error {
+			event := event
+			if event.Type == linebot.EventTypeMessage {
+				switch message := event.Message.(type) {
+				case *linebot.ImageMessage:
+					log.Println("image")
+					res, err := bot.GetMessageContent(message.ID).Do()
+					if err != nil {
+						return err
+					}
 
-				wt := bufio.NewWriter(fo)
-				buf := make([]byte, 1024)
-				for {
-					n, err := fr.Read(buf)
-					if err != nil && err != io.EOF {
-						log.Println(err)
-						return
+					_, err = mc.PutObject("photo", time.Now().Format(time.RFC3339), res.Content, res.ContentLength, minio.PutObjectOptions{
+						ContentType: res.ContentType,
+					})
+					if err != nil {
+						return err
 					}
-					if n == 0 {
-						break
-					}
-					if _, err := wt.Write(buf[:n]); err != nil {
-						log.Println(err)
-						return
-					}
+
+					log.Println(res.ContentLength, res.ContentType)
+					log.Println(message.ID, message.OriginalContentURL, message.PreviewImageURL)
+				case *linebot.TextMessage:
+					log.Println("text")
 				}
-				wt.Flush()
-				log.Println(res.ContentLength, res.ContentType)
-				log.Println(message.ID, message.OriginalContentURL, message.PreviewImageURL)
-			case *linebot.TextMessage:
-				log.Println("text")
+			} else if event.Type == linebot.EventTypeMemberJoined {
+				log.Println("member joined")
+			} else if event.Type == linebot.EventTypeJoin {
+				log.Println("join")
 			}
-		} else if event.Type == linebot.EventTypeMemberJoined {
-			log.Println("member joined")
-		} else if event.Type == linebot.EventTypeJoin {
-			log.Println("join")
-		}
+			return nil
+		})
 	}
+
 }
