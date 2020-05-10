@@ -1,10 +1,12 @@
 package main
 
 import (
+	"bufio"
+	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"os"
-	"strconv"
 
 	"github.com/line/line-bot-sdk-go/linebot"
 )
@@ -15,13 +17,14 @@ func main() {
 	var err error
 	bot, err = linebot.New(os.Getenv("CHANNEL_SECRET"), os.Getenv("CHANNEL_ACCESS_TOKEN"))
 	if err != nil {
-		log.Fatal(err)
+		fmt.Println(err)
+		return
 	}
 
-	http.HandleFunc("/callback", callbackHandler)
-	port := os.Getenv("PORT")
-	if err := http.ListenAndServe(":"+port, nil); err != nil {
-		log.Println(err)
+	http.HandleFunc("/", callbackHandler)
+
+	if err := http.ListenAndServe(":"+os.Getenv("PORT"), nil); err != nil {
+		fmt.Println(err)
 	}
 }
 
@@ -30,8 +33,10 @@ func callbackHandler(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		switch err {
 		case linebot.ErrInvalidSignature:
+			log.Println("400")
 			w.WriteHeader(400)
 		default:
+			log.Println("500")
 			w.WriteHeader(500)
 		}
 		return
@@ -41,16 +46,49 @@ func callbackHandler(w http.ResponseWriter, r *http.Request) {
 		if event.Type == linebot.EventTypeMessage {
 			switch message := event.Message.(type) {
 			case *linebot.ImageMessage:
-				log.Println(message.OriginalContentURL, message.PreviewImageURL)
-			case *linebot.TextMessage:
-				quota, err := bot.GetMessageQuota().Do()
+				log.Println("image")
+				res, err := bot.GetMessageContent(message.ID).Do()
 				if err != nil {
-					log.Println("Quota err:", err)
+					log.Println(err)
+					return
 				}
-				if _, err = bot.ReplyMessage(event.ReplyToken, linebot.NewTextMessage(message.ID+":"+message.Text+" OK! remain message:"+strconv.FormatInt(quota.Value, 10))).Do(); err != nil {
-					log.Print(err)
+				// Content       io.ReadCloser
+				// ContentLength int64
+				// ContentType   string
+				fr := bufio.NewReader(res.Content)
+				fo, err := os.Create("gglong.png")
+				if err != nil {
+					log.Println(err)
+					return
 				}
+				defer fo.Close()
+
+				wt := bufio.NewWriter(fo)
+				buf := make([]byte, 1024)
+				for {
+					n, err := fr.Read(buf)
+					if err != nil && err != io.EOF {
+						log.Println(err)
+						return
+					}
+					if n == 0 {
+						break
+					}
+					if _, err := wt.Write(buf[:n]); err != nil {
+						log.Println(err)
+						return
+					}
+				}
+				wt.Flush()
+				log.Println(res.ContentLength, res.ContentType)
+				log.Println(message.ID, message.OriginalContentURL, message.PreviewImageURL)
+			case *linebot.TextMessage:
+				log.Println("text")
 			}
+		} else if event.Type == linebot.EventTypeMemberJoined {
+			log.Println("member joined")
+		} else if event.Type == linebot.EventTypeJoin {
+			log.Println("join")
 		}
 	}
 }
