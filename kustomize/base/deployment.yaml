@@ -1,0 +1,53 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tianen
+  namespace: tianen
+spec:
+  replicas: 2
+  template:
+    metadata:
+      labels:
+        deployment: tianen
+    spec:
+      containers:
+      - name: tianen
+        image: tommady/tianen:latest
+        ports:
+        - containerPort: 8080
+        env:
+        - name: MINIO_BUCKET
+          valueFrom:
+            secretKeyRef:
+              name: tianen-secrets
+              key: MINIO_BUCKET
+        - name: MINIO_ENDPOINT
+          valueFrom:
+            secretKeyRef:
+              name: tianen-secrets
+              key: MINIO_ENDPOINT
+        - name: MINIO_ACCESS_KEY_ID
+          valueFrom:
+            secretKeyRef:
+              name: tianen-secrets
+              key: MINIO_ACCESS_KEY_ID
+        - name: MINIO_SECRET_ACCESS_KEY
+          valueFrom:
+            secretKeyRef:
+              name: tianen-secrets
+              key: MINIO_SECRET_ACCESS_KEY
+        - name: PORT
+          valueFrom:
+            secretKeyRef:
+              name: tianen-secrets
+              key: PORT
+        - name: LINEBOT_CHANNEL_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: tianen-secrets
+              key: LINEBOT_CHANNEL_SECRET
+        - name: LINEBOT_CHANNEL_ACCESS_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: tianen-secrets
+              key: LINEBOT_CHANNEL_ACCESS_TOKEN

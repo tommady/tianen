@@ -14,6 +14,7 @@ import (
 var bot *linebot.Client
 var pool = newWorkerPool(100, 10)
 var mc *minio.Client
+var bucket = os.Getenv("MINIO_BUCKET")
 
 type jobFunc func() error
 
@@ -55,7 +56,7 @@ func (wp *workerPool) Close() {
 
 func main() {
 	var err error
-	bot, err = linebot.New(os.Getenv("CHANNEL_SECRET"), os.Getenv("CHANNEL_ACCESS_TOKEN"))
+	bot, err = linebot.New(os.Getenv("LINEBOT_CHANNEL_SECRET"), os.Getenv("LINEBOT_CHANNEL_ACCESS_TOKEN"))
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -79,10 +80,8 @@ func callbackHandler(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		switch err {
 		case linebot.ErrInvalidSignature:
-			log.Println("400")
 			w.WriteHeader(400)
 		default:
-			log.Println("500")
 			w.WriteHeader(500)
 		}
 		return
@@ -91,31 +90,32 @@ func callbackHandler(w http.ResponseWriter, r *http.Request) {
 	for _, event := range events {
 		pool.PutJob(func() error {
 			event := event
-			if event.Type == linebot.EventTypeMessage {
+
+			if event.Source.Type != linebot.EventSourceTypeUser {
+				return nil
+			}
+
+			if event.Source.UserID != "U00d6815afb6f57eb9ac959614d2520db" && event.Source.UserID != "U5b9f3b6e6636930d434372d70ce9c9b0" {
+				return nil
+			}
+
+			switch event.Type {
+			case linebot.EventTypeMessage:
 				switch message := event.Message.(type) {
 				case *linebot.ImageMessage:
-					log.Println("image")
 					res, err := bot.GetMessageContent(message.ID).Do()
 					if err != nil {
 						return err
 					}
 
-					_, err = mc.PutObject("photo", time.Now().Format(time.RFC3339), res.Content, res.ContentLength, minio.PutObjectOptions{
+					_, err = mc.PutObject(bucket, time.Now().Format(time.RFC3339Nano), res.Content, res.ContentLength, minio.PutObjectOptions{
 						ContentType: res.ContentType,
 					})
 					if err != nil {
 						return err
 					}
-
-					log.Println(res.ContentLength, res.ContentType)
-					log.Println(message.ID, message.OriginalContentURL, message.PreviewImageURL)
-				case *linebot.TextMessage:
-					log.Println("text")
 				}
-			} else if event.Type == linebot.EventTypeMemberJoined {
-				log.Println("member joined")
-			} else if event.Type == linebot.EventTypeJoin {
-				log.Println("join")
+
 			}
 			return nil
 		})
