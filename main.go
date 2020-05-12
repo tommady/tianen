@@ -99,26 +99,35 @@ func callbackHandler(w http.ResponseWriter, r *http.Request) {
 				return nil
 			}
 
+			var err error
 			switch event.Type {
 			case linebot.EventTypeMessage:
 				switch message := event.Message.(type) {
 				case *linebot.ImageMessage:
-					res, err := bot.GetMessageContent(message.ID).Do()
-					if err != nil {
-						return err
-					}
-
-					_, err = mc.PutObject(bucket, time.Now().Format(time.RFC3339Nano), res.Content, res.ContentLength, minio.PutObjectOptions{
-						ContentType: res.ContentType,
-					})
-					if err != nil {
-						return err
-					}
+					err = handleMessageContent(message.ID)
+				case *linebot.VideoMessage:
+					err = handleMessageContent(message.ID)
 				}
 
 			}
-			return nil
+			return err
 		})
 	}
 
+}
+
+func handleMessageContent(msgID string) error {
+	res, err := bot.GetMessageContent(msgID).Do()
+	if err != nil {
+		return err
+	}
+
+	_, err = mc.PutObject(bucket, time.Now().Format(time.RFC3339Nano), res.Content, res.ContentLength, minio.PutObjectOptions{
+		ContentType: res.ContentType,
+	})
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
