@@ -4,7 +4,7 @@ on:
     branches: [ master ]  
 jobs:   
   build:    
-    runs-on: ubuntu-19.04
+    runs-on: ubuntu-18.04
     env:      
       DOCKER_REGISTRY: docker.io      
       DOCKER_IMAGE: tommady/tianen 
