@@ -8,6 +8,7 @@ jobs:
     env:      
       DOCKER_REGISTRY: docker.io      
       DOCKER_IMAGE: tommady/tianen 
+      DOCKER_IMAGE_TAG: latest
       DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
       DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}  
       DOCKER_TARGET_PLATFORM: linux/amd64,linux/arm64,linux/arm/v7
@@ -24,7 +25,7 @@ jobs:
       run: |        
         echo ::set-output name=docker_platform::${DOCKER_TARGET_PLATFORM}        
         echo ::set-output name=docker_image::${DOCKER_REGISTRY}/${DOCKER_IMAGE}        
-        echo ::set-output name=version::${GITHUB_RUN_NUMBER}    
+        echo ::set-output name=version::${DOCKER_IMAGE_TAG}
     - name: Docker Login      
       if: success()      
       run: |        
