@@ -13,10 +13,12 @@ import (
 )
 
 var (
-	bot    *linebot.Client
-	pool   = newWorkerPool(100, 10)
-	mc     *minio.Client
-	bucket = os.Getenv("MINIO_BUCKET")
+	bot        *linebot.Client
+	pool       = newWorkerPool(100, 10)
+	mc         *minio.Client
+	bucket     = os.Getenv("MINIO_BUCKET")
+	userBucket = os.Getenv("MINIO_USER_BUCKET")
+	userList   map[string]struct{}
 )
 
 type jobFunc func() error
@@ -69,6 +71,15 @@ func main() {
 		log.Fatal(err)
 	}
 
+	// Create a done channel.
+
+	doneCh := make(chan struct{})
+	defer close(doneCh)
+	userList = make(map[string]struct{})
+	for userObj := range mc.ListObjects(userBucket, "", true, doneCh) {
+		userList[userObj.Key] = struct{}{}
+	}
+
 	defer pool.Close()
 
 	http.HandleFunc("/", callbackHandler)
@@ -98,7 +109,8 @@ func callbackHandler(w http.ResponseWriter, r *http.Request) {
 				return nil
 			}
 
-			if event.Source.UserID != "U00d6815afb6f57eb9ac959614d2520db" && event.Source.UserID != "U5b9f3b6e6636930d434372d70ce9c9b0" {
+			_, ok := userList[event.Source.UserID]
+			if ok == false {
 				return nil
 			}
 
