@@ -26,12 +26,13 @@ jobs:
         echo ::set-output name=docker_platform::${DOCKER_TARGET_PLATFORM}        
         echo ::set-output name=docker_image::${DOCKER_REGISTRY}/${DOCKER_IMAGE}        
         echo ::set-output name=version::${DOCKER_IMAGE_TAG}
-    - name: Docker Login      
-      if: success()      
-      run: |        
-        echo "${DOCKER_PASSWORD}" | docker login ${DOCKER_REGISTRY} --username "${DOCKER_USERNAME}" --password-stdin          
     - name: Run Buildx (push image)      
       if: success()      
+      uses: azure/docker-login@v1
+      with: 
+        login-server: index.docker.io
+        username: ${DOCKER_USERNAME}
+        password: ${DOCKER_PASSWORD}
       run: |        
         docker buildx build \
         --platform ${{ steps.prepare.outputs.docker_platform }} \
