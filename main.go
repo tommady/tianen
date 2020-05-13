@@ -11,10 +11,12 @@ import (
 	"github.com/minio/minio-go/v6"
 )
 
-var bot *linebot.Client
-var pool = newWorkerPool(100, 10)
-var mc *minio.Client
-var bucket = os.Getenv("MINIO_BUCKET")
+var (
+	bot    *linebot.Client
+	pool   = newWorkerPool(100, 10)
+	mc     *minio.Client
+	bucket = os.Getenv("MINIO_BUCKET")
+)
 
 type jobFunc func() error
 
