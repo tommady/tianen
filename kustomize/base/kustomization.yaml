@@ -6,6 +6,7 @@ commonLabels:
 resources:
 - deployment.yaml
 - service.yaml
+- headless-service.yaml
 secretGenerator:
 - name: tianen-secrets
   env: secrets.env

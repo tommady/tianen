@@ -105,6 +105,7 @@ func callbackHandler(w http.ResponseWriter, r *http.Request) {
 			switch event.Type {
 			case linebot.EventTypeMessage:
 				switch message := event.Message.(type) {
+				case *linebot.TextMessage:
 				case *linebot.ImageMessage:
 					err = handleMessageContent(message.ID)
 				case *linebot.VideoMessage:
@@ -116,6 +117,20 @@ func callbackHandler(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
+}
+
+const (
+	todayObjectsCmd     = "[today objects]"
+	thisMonthObjectsCmd = "[this month objects]"
+)
+
+func handleCommand(msg string) error {
+	switch msg {
+	case todayObjectsCmd:
+	case thisMonthObjectsCmd:
+	}
+
+	linebot.NewImagemapMessage()
 }
 
 func handleMessageContent(msgID string) error {

@@ -9,7 +9,7 @@ RUN go build -ldflags="-s -w" -o main .
 FROM alpine as certs
 RUN apk update && apk add ca-certificates
 
-FROM busybox:latest AS runtime
+FROM busybox:1.28.4 AS runtime
 COPY --from=builder /app/main ./
 COPY --from=certs /etc/ssl/certs /etc/ssl/certs
 
