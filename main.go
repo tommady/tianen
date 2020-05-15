@@ -102,10 +102,12 @@ func callbackHandler(w http.ResponseWriter, r *http.Request) {
 			}
 
 			var err error
+			var res linebot.SendingMessage
 			switch event.Type {
 			case linebot.EventTypeMessage:
 				switch message := event.Message.(type) {
 				case *linebot.TextMessage:
+					res, err = handleCommand(message.Text)
 				case *linebot.ImageMessage:
 					err = handleMessageContent(message.ID)
 				case *linebot.VideoMessage:
@@ -113,24 +115,54 @@ func callbackHandler(w http.ResponseWriter, r *http.Request) {
 				}
 
 			}
-			return err
+			if err != nil {
+				return err
+			}
+
+			if _, err = bot.ReplyMessage(event.ReplyToken, res).Do(); err != nil {
+				return err
+			}
+			return nil
 		})
 	}
 
 }
 
 const (
-	todayObjectsCmd     = "[today objects]"
-	thisMonthObjectsCmd = "[this month objects]"
+	todayObjectsCmd                = "[today objects]"
+	thisMonthObjectsCmd            = "[this month objects]"
+	defaultPresignedTimeoutMinutes = 30 * time.Minute
 )
 
-func handleCommand(msg string) error {
+func handleCommand(msg string) (*linebot.TemplateMessage, error) {
+	var prefix string
 	switch msg {
 	case todayObjectsCmd:
+		prefix = time.Now().Format("2006-01-02")
 	case thisMonthObjectsCmd:
+		prefix = time.Now().Format("2006-01")
+	default:
+		return nil, nil
 	}
 
-	linebot.NewImagemapMessage()
+	doneCh := make(chan struct{})
+	defer close(doneCh)
+
+	carousels := make([]*linebot.ImageCarouselColumn, 0)
+	for obj := range mc.ListObjectsV2(bucket, prefix, false, doneCh) {
+		url, err := mc.PresignedGetObject(bucket, obj.Key, defaultPresignedTimeoutMinutes)
+		if err != nil {
+			return nil, err
+		}
+
+		carousels = append(carousels, linebot.NewImageCarouselColumn(url.String(), linebot.NewURIAction("", url.String())))
+	}
+
+	//(thumbnailImageURL, title, text string, actions ...TemplateAction)
+	return linebot.NewTemplateMessage(
+		"images",
+		linebot.NewImageCarouselTemplate(carousels...),
+	), nil
 }
 
 func handleMessageContent(msgID string) error {
