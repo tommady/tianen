@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"log"
 	"net/http"
 	"os"
@@ -116,13 +117,18 @@ func callbackHandler(w http.ResponseWriter, r *http.Request) {
 
 			}
 			if err != nil {
-				return err
+				switch err {
+				case errNoObject:
+					res = linebot.NewTextMessage("no object to show lah")
+				default:
+					res = linebot.NewTextMessage("internal server error lah")
+				}
 			}
 
-			if _, err = bot.ReplyMessage(event.ReplyToken, res).Do(); err != nil {
+			if _, err := bot.ReplyMessage(event.ReplyToken, res).Do(); err != nil {
 				return err
 			}
-			return nil
+			return err
 		})
 	}
 
@@ -132,6 +138,11 @@ const (
 	todayObjectsCmd                = "[today objects]"
 	thisMonthObjectsCmd            = "[this month objects]"
 	defaultPresignedTimeoutMinutes = 30 * time.Minute
+	lineMaxCarouseSize             = 10
+)
+
+var (
+	errNoObject = errors.New("no object")
 )
 
 func handleCommand(msg string) (*linebot.TemplateMessage, error) {
@@ -148,17 +159,29 @@ func handleCommand(msg string) (*linebot.TemplateMessage, error) {
 	doneCh := make(chan struct{})
 	defer close(doneCh)
 
-	carousels := make([]*linebot.ImageCarouselColumn, 0)
+	keys := make([]string, 0)
 	for obj := range mc.ListObjectsV2(bucket, prefix, false, doneCh) {
-		url, err := mc.PresignedGetObject(bucket, obj.Key, defaultPresignedTimeoutMinutes, nil)
+		keys = append(keys, obj.Key)
+
+	}
+
+	carousels := make([]*linebot.ImageCarouselColumn, 0, lineMaxCarouseSize)
+	for i := len(keys) - 1; i >= 0; i-- {
+		url, err := mc.PresignedGetObject(bucket, keys[i], defaultPresignedTimeoutMinutes, nil)
 		if err != nil {
 			return nil, err
 		}
 
-		carousels = append(carousels, linebot.NewImageCarouselColumn(url.String(), linebot.NewURIAction("", url.String())))
+		carousels = append(carousels, linebot.NewImageCarouselColumn(url.String(), linebot.NewURIAction(keys[i], url.String())))
+		if len(carousels) >= lineMaxCarouseSize {
+			break
+		}
 	}
 
-	//(thumbnailImageURL, title, text string, actions ...TemplateAction)
+	if len(carousels) == 0 {
+		return nil, errNoObject
+	}
+
 	return linebot.NewTemplateMessage(
 		"images",
 		linebot.NewImageCarouselTemplate(carousels...),
