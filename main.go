@@ -172,7 +172,7 @@ func handleCommand(msg string) (*linebot.TemplateMessage, error) {
 			return nil, err
 		}
 
-		carousels = append(carousels, linebot.NewImageCarouselColumn(url.String(), linebot.NewURIAction(keys[i], url.String())))
+		carousels = append(carousels, linebot.NewImageCarouselColumn(url.String(), linebot.NewURIAction("", url.String())))
 		if len(carousels) >= lineMaxCarouseSize {
 			break
 		}
