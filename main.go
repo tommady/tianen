@@ -150,7 +150,7 @@ func handleCommand(msg string) (*linebot.TemplateMessage, error) {
 
 	carousels := make([]*linebot.ImageCarouselColumn, 0)
 	for obj := range mc.ListObjectsV2(bucket, prefix, false, doneCh) {
-		url, err := mc.PresignedGetObject(bucket, obj.Key, defaultPresignedTimeoutMinutes)
+		url, err := mc.PresignedGetObject(bucket, obj.Key, defaultPresignedTimeoutMinutes, nil)
 		if err != nil {
 			return nil, err
 		}
