@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"errors"
 	"log"
 	"net/http"
@@ -13,12 +14,23 @@ import (
 )
 
 var (
-	bot        *linebot.Client
-	pool       = newWorkerPool(100, 10)
-	mc         *minio.Client
-	bucket     = os.Getenv("MINIO_BUCKET")
-	userBucket = os.Getenv("MINIO_USER_BUCKET")
-	userList   map[string]struct{}
+	bot      *linebot.Client
+	pool     = newWorkerPool(100, 10)
+	mc       *minio.Client
+	bucket   = os.Getenv("MINIO_BUCKET")
+	userList = make(map[string]struct{})
+)
+
+const (
+	todayObjectsCmd                = "[today objects]"
+	thisMonthObjectsCmd            = "[this month objects]"
+	defaultPresignedTimeoutMinutes = 30 * time.Minute
+	lineMaxCarouseSize             = 10
+	defaultLinebotUserObjName      = "tianen-users.json"
+)
+
+var (
+	errNoObject = errors.New("no object")
 )
 
 type jobFunc func() error
@@ -71,16 +83,21 @@ func main() {
 		log.Fatal(err)
 	}
 
-	// Create a done channel.
-
-	doneCh := make(chan struct{})
-	userList = make(map[string]struct{})
-	for userObj := range mc.ListObjectsV2(userBucket, "", false, doneCh) {
-		userList[userObj.Key] = struct{}{}
-	}
-	close(doneCh)
-
 	defer pool.Close()
+
+	obj, err := mc.GetObject(bucket, defaultLinebotUserObjName, minio.GetObjectOptions{})
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	users := []string{}
+	if err := json.NewDecoder(obj).Decode(&users); err != nil {
+		log.Fatal(err)
+	}
+
+	for _, user := range users {
+		userList[user] = struct{}{}
+	}
 
 	http.HandleFunc("/", callbackHandler)
 	if err := http.ListenAndServe(":"+os.Getenv("PORT"), nil); err != nil {
@@ -143,17 +160,6 @@ func callbackHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 }
-
-const (
-	todayObjectsCmd                = "[today objects]"
-	thisMonthObjectsCmd            = "[this month objects]"
-	defaultPresignedTimeoutMinutes = 30 * time.Minute
-	lineMaxCarouseSize             = 10
-)
-
-var (
-	errNoObject = errors.New("no object")
-)
 
 func handleCommand(msg string) (*linebot.TemplateMessage, error) {
 	var prefix string

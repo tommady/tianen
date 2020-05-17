@@ -4,4 +4,7 @@ build-and-publish-image:
   --tag tommady/tianen:latest \
   --push .
 
-.PHONY: build-and-publish-image
+deploy:
+	kubectl kustomize ./kustomize/base/. | kubectl apply -f -
+
+.PHONY: build-and-publish-image deploy

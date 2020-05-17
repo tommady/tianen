@@ -21,11 +21,6 @@ spec:
             secretKeyRef:
               name: tianen-secrets
               key: MINIO_BUCKET
-        - name: MINIO_USER_BUCKET
-          valueFrom:
-            secretKeyRef:
-              name: tianen-secrets
-              key: MINIO_USER_BUCKET
         - name: MINIO_ENDPOINT
           valueFrom:
             secretKeyRef:
