@@ -74,16 +74,15 @@ func main() {
 	// Create a done channel.
 
 	doneCh := make(chan struct{})
-	defer close(doneCh)
 	userList = make(map[string]struct{})
-	for userObj := range mc.ListObjects(userBucket, "", true, doneCh) {
+	for userObj := range mc.ListObjectsV2(userBucket, "", false, doneCh) {
 		userList[userObj.Key] = struct{}{}
 	}
+	close(doneCh)
 
 	defer pool.Close()
 
 	http.HandleFunc("/", callbackHandler)
-
 	if err := http.ListenAndServe(":"+os.Getenv("PORT"), nil); err != nil {
 		log.Fatal(err)
 	}
@@ -109,8 +108,7 @@ func callbackHandler(w http.ResponseWriter, r *http.Request) {
 				return nil
 			}
 
-			_, ok := userList[event.Source.UserID]
-			if ok == false {
+			if _, ok := userList[event.Source.UserID]; !ok {
 				return nil
 			}
 
