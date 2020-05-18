@@ -1,5 +1,10 @@
 package main
 
+import (
+	"log"
+	"sync"
+)
+
 type jobFunc func() error
 
 type workerPool struct {
