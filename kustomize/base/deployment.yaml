@@ -12,7 +12,7 @@ spec:
     spec:
       containers:
       - name: tianen
-        image: tommady/tianen:latest
+        image: docker.io/tommady/tianen:latest
         ports:
         - containerPort: 8080
         env:
